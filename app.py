@@ -1,3 +1,5 @@
+# Flask 서버와 자동 스케줄러 기반 태양광 예보 시스템
+
 from flask import Flask, render_template_string
 from apscheduler.schedulers.background import BackgroundScheduler
 import chromedriver_autoinstaller
@@ -12,15 +14,18 @@ import pandas as pd
 import pymysql
 import pytz
 
+# Flask 앱 및 시간대 설정
 app = Flask(__name__)
 KST = pytz.timezone("Asia/Seoul")
 chromedriver_autoinstaller.install()
 
+# Chrome 드라이버 옵션 설정
 chrome_options = Options()
 chrome_options.add_argument("--headless")
 chrome_options.add_argument("--no-sandbox")
 chrome_options.add_argument("--disable-dev-shm-usage")
 
+# 기상청 페이지에서 데이터를 크롤링하여 DataFrame으로 반환
 def download_pvsim(now=None):
     if now is None:
         now = datetime.now(KST)
@@ -29,13 +34,16 @@ def download_pvsim(now=None):
     driver.implicitly_wait(2)
     driver.get("https://bd.kma.go.kr/kma2020/fs/energySelect2.do?menuCd=F050702000")
 
+    # 날짜와 시간 설정
     driver.execute_script(f"document.getElementById('testYmd').value = '{now.strftime('%Y%m%d')}';")
     driver.execute_script(f"document.getElementById('testTime').value = '{now.strftime('%H%M')}';")
 
+    # 위도/경도 설정 후 조회 버튼 클릭
     driver.find_element(By.ID, "txtLat").send_keys('35.0606')
     driver.find_element(By.ID, "txtLon").send_keys('126.749')
     driver.find_element(By.ID, "search_btn").send_keys(Keys.RETURN)
 
+    # 결과 응답 대기
     element = driver.find_element(By.ID, 'toEnergy')
     for _ in range(20):
         lines = element.text.strip().split('\n')[12:]
@@ -46,6 +54,7 @@ def download_pvsim(now=None):
         driver.quit()
         raise TimeoutException("데이터 수신 실패")
 
+    # 데이터 파싱
     lines = element.text.strip().split('\n')
     today_data, tomorrow_data = [], []
     today = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -59,12 +68,13 @@ def download_pvsim(now=None):
         today_time = today + timedelta(hours=int(hour))
         tomorrow_time = tomorrow + timedelta(hours=int(hour))
 
-        # 오늘 데이터: parts[1:6], 내일 예보: parts[6:9]
+        # 오늘 + 내일 예보 데이터 분리 저장
         if parts[1] != '-' and parts[6] != '-':
             today_data.append([today_time.strftime("%Y-%m-%d %H:%M")] + parts[1:6] + parts[6:9])
         elif parts[6] != '-':
             tomorrow_data.append([tomorrow_time.strftime("%Y-%m-%d %H:%M")] + ['-'] * 5 + parts[6:9])
 
+    # 데이터프레임 생성
     columns = ["datetime", "powergen", "cumulative", "irradiance", "temperature", "wind",
                "fcst_irradiance", "fcst_temperature", "fcst_wind"]
     df = pd.concat([
@@ -78,6 +88,7 @@ def download_pvsim(now=None):
     driver.quit()
     return df.reset_index(drop=True)
 
+# 수집한 데이터를 MySQL에 저장
 def save_to_db(df):
     conn = pymysql.connect(
         host='localhost',
@@ -117,6 +128,7 @@ def save_to_db(df):
     finally:
         conn.close()
 
+# 매일 7시에 실행될 자동 수집 작업
 def scheduled_task():
     print(f"[{datetime.now(KST)}] 자동 수집 시작")
     try:
@@ -126,10 +138,12 @@ def scheduled_task():
     except Exception as e:
         print(f"❌ 오류 발생: {e}")
 
+# 스케줄러 시작 (매일 오전 7시)
 scheduler = BackgroundScheduler()
 scheduler.add_job(scheduled_task, 'cron', hour=7, minute=0)
 scheduler.start()
 
+# 웹 페이지 라우트: 실시간 데이터 크롤링 및 시각화
 @app.route("/")
 def home():
     try:
@@ -137,6 +151,7 @@ def home():
     except Exception as e:
         return f"<h1>🚨 데이터 수집 실패</h1><p>{e}</p>"
 
+    # HTML 템플릿 (Jinja2 기반)
     template = """
     <!doctype html>
     <html lang=\"ko\">
@@ -184,5 +199,6 @@ def home():
     """
     return render_template_string(template, rows=df.to_dict(orient='records'), now=datetime.now(KST).strftime("%Y-%m-%d %H:%M"))
 
+# 서버 실행
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
