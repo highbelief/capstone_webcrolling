@@ -43,6 +43,8 @@ def download_pvsim(now=None):
 
     driver.find_element(By.ID, "txtLat").send_keys('34.910')
     driver.find_element(By.ID, "txtLon").send_keys('126.435')
+    driver.find_element(By.ID, "install_cap").clear()
+    driver.find_element(By.ID, "install_cap").send_keys('500')  # 500MW 발전소 기준
     driver.find_element(By.ID, "search_btn").send_keys(Keys.RETURN)
 
     element = driver.find_element(By.ID, 'toEnergy')
@@ -68,7 +70,6 @@ def download_pvsim(now=None):
         today_time = today + timedelta(hours=int(hour))
         tomorrow_time = tomorrow + timedelta(hours=int(hour))
 
-        # 오늘 데이터는 실제 측정값 기준으로 삽입 대상
         today_data.append([
             today_time.strftime("%Y-%m-%d %H:%M"),
             parse_or_zero(parts[1]),
@@ -79,7 +80,6 @@ def download_pvsim(now=None):
             0.0, 0.0, 0.0
         ])
 
-        # 내일 데이터는 참고용으로 수집하되, 삽입 대상 아님
         tomorrow_data.append([
             tomorrow_time.strftime("%Y-%m-%d %H:%M"),
             0.0, 0.0, 0.0, 0.0, 0.0,
@@ -174,11 +174,11 @@ def home():
     except Exception as e:
         return f"<h1>🚨 데이터 수집 실패</h1><p>{e}</p>"
 
-    template = """
+    template =     template = """
     <!doctype html>
-    <html lang=\"ko\">
+    <html lang="ko">
     <head>
-        <meta charset=\"utf-8\">
+        <meta charset="utf-8">
         <title>무안군 태양광 예보</title>
         <style>
             body { font-family: sans-serif; padding: 30px; }
@@ -192,15 +192,15 @@ def home():
     <body>
         <h1>☀ 무안군 태양광 발전 예보</h1>
         <p>크롤링 시각: {{ now }}</p>
-        <form action=\"/insert\" method=\"get\">
-            <button type=\"submit\" class=\"btn-insert\">데이터 수동 삽입</button>
+        <form action="/insert" method="get">
+            <button type="submit" class="btn-insert">데이터 수동 삽입</button>
         </form>
         <table>
             <thead>
                 <tr>
-                    <th rowspan=\"2\">시간</th>
-                    <th colspan=\"5\">오늘</th>
-                    <th colspan=\"3\">내일</th>
+                    <th rowspan="2">시간</th>
+                    <th colspan="5">오늘</th>
+                    <th colspan="3">내일</th>
                 </tr>
                 <tr>
                     <th>발전량 (MW)</th>
@@ -232,6 +232,7 @@ def home():
     </body>
     </html>
     """
+
     return render_template_string(template, rows=df.to_dict(orient='records'), now=datetime.now(KST).strftime("%Y-%m-%d %H:%M"))
 
 # 서버 실행
