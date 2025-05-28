@@ -62,40 +62,43 @@ def download_pvsim(now=None):
 
     for line in lines:
         parts = line.split()
-        if len(parts) < 9:
+        if len(parts) < 11:
             continue
         hour = parts[0][:-1].zfill(2)
         today_time = today + timedelta(hours=int(hour))
         tomorrow_time = tomorrow + timedelta(hours=int(hour))
 
-        if parts[1] != '-':
-            today_data.append([
-                today_time.strftime("%Y-%m-%d %H:%M"),
-                parse_or_zero(parts[1]), parse_or_zero(parts[2]), parse_or_zero(parts[3]),
-                parse_or_zero(parts[4]), parse_or_zero(parts[5]),
-                0.0, 0.0, 0.0
-            ])
-        if parts[6] != '-':
-            tomorrow_data.append([
-                tomorrow_time.strftime("%Y-%m-%d %H:%M"),
-                0.0, 0.0, 0.0, 0.0, 0.0,
-                parse_or_zero(parts[6]),
-                parse_or_zero(parts[7]) if len(parts) > 7 else 0.0,
-                parse_or_zero(parts[8]) if len(parts) > 8 else 0.0
-            ])
+        # 오늘 데이터는 실제 측정값 기준으로 삽입 대상
+        today_data.append([
+            today_time.strftime("%Y-%m-%d %H:%M"),
+            parse_or_zero(parts[1]),
+            parse_or_zero(parts[2]),
+            parse_or_zero(parts[3]),
+            parse_or_zero(parts[4]),
+            parse_or_zero(parts[5]),
+            0.0, 0.0, 0.0
+        ])
+
+        # 내일 데이터는 참고용으로 수집하되, 삽입 대상 아님
+        tomorrow_data.append([
+            tomorrow_time.strftime("%Y-%m-%d %H:%M"),
+            0.0, 0.0, 0.0, 0.0, 0.0,
+            parse_or_zero(parts[8]),
+            parse_or_zero(parts[9]),
+            parse_or_zero(parts[10])
+        ])
 
     columns = [
         "datetime", "powergen", "cumulative", "irradiance", "temperature", "wind",
         "fcst_irradiance", "fcst_temperature", "fcst_wind"
     ]
-    df = pd.concat([
-        pd.DataFrame(today_data, columns=columns),
-        pd.DataFrame(tomorrow_data, columns=columns)
-    ])
+    df_today = pd.DataFrame(today_data, columns=columns)
+    df_tomorrow = pd.DataFrame(tomorrow_data, columns=columns)
 
-    df.fillna(0.0, inplace=True)
+    df_today.fillna(0.0, inplace=True)
+    df_tomorrow.fillna(0.0, inplace=True)
     driver.quit()
-    return df.reset_index(drop=True)
+    return df_today.reset_index(drop=True), df_tomorrow.reset_index(drop=True)
 
 # 수집한 데이터를 MySQL에 저장
 def save_to_db(df):
@@ -141,8 +144,8 @@ def save_to_db(df):
 def scheduled_task():
     print(f"[{datetime.now(KST)}] 자동 수집 시작")
     try:
-        df = download_pvsim()
-        save_to_db(df)
+        df_today, _ = download_pvsim()
+        save_to_db(df_today)
         print("✅ 저장 완료")
     except Exception as e:
         print(f"❌ 오류 발생: {e}")
@@ -156,8 +159,8 @@ scheduler.start()
 @app.route("/insert")
 def manual_insert():
     try:
-        df = download_pvsim()
-        save_to_db(df)
+        df_today, _ = download_pvsim()
+        save_to_db(df_today)
         return redirect(url_for('home'))
     except Exception as e:
         return f"<h1>🚨 삽입 실패</h1><p>{e}</p>"
@@ -166,7 +169,8 @@ def manual_insert():
 @app.route("/")
 def home():
     try:
-        df = download_pvsim()
+        df_today, df_tomorrow = download_pvsim()
+        df = pd.concat([df_today, df_tomorrow])
     except Exception as e:
         return f"<h1>🚨 데이터 수집 실패</h1><p>{e}</p>"
 
