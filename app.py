@@ -115,19 +115,19 @@ def save_to_db(df):
             for _, row in df.iterrows():
                 sql = """
                     INSERT INTO measurement (
-                        measured_at, power_kw, cumulative_kwh,
+                        measured_at, power_mw, cumulative_mwh,
                         irradiance_wm2, temperature_c, wind_speed_ms,
                         forecast_irradiance_wm2, forecast_temperature_c, forecast_wind_speed_ms
                     ) VALUES (
-                        %(measured_at)s, %(power_kw)s, %(cumulative_kwh)s,
+                        %(measured_at)s, %(power_mw)s, %(cumulative_mwh)s,
                         %(irradiance_wm2)s, %(temperature_c)s, %(wind_speed_ms)s,
                         %(forecast_irradiance_wm2)s, %(forecast_temperature_c)s, %(forecast_wind_speed_ms)s
                     )
                 """
                 data = {
                     'measured_at': datetime.strptime(row['datetime'], '%Y-%m-%d %H:%M'),
-                    'power_kw': row['powergen'],
-                    'cumulative_kwh': row['cumulative'],
+                    'power_mw': row['powergen'],
+                    'cumulative_mwh': row['cumulative'],
                     'irradiance_wm2': row['irradiance'],
                     'temperature_c': row['temperature'],
                     'wind_speed_ms': row['wind'],
@@ -237,3 +237,4 @@ def home():
 # 서버 실행
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
+
