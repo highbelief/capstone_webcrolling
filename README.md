@@ -87,5 +87,5 @@ python app.py
 
 ## 🙋 문의
 
-* 담당자: (예: [yourname@domain.com](mailto:yourname@domain.com))
+* 담당자: 국립목포대학교 공과대학 융합소프트웨어학과 스포트라이트팀 팀장
 * 수정 요청 및 이슈는 GitHub Issue로 등록해주세요.
